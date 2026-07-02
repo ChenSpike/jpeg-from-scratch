@@ -71,9 +71,9 @@ python src/main.py --input data/test_image_01.ARW --quality 10 20 30 40 50 60 70
 
 ![RD Curve](assets/test_image_01_curve_both.png)
 
-| Quality 10 | Quality 90 |
-|---|---|
-| ![Q10](assets/test_image_01_q10_420.png) | ![Q90](assets/test_image_01_q90_420.png) |
+| Quality 10 | Quality 50 | Quality 90 |
+|---|---|---|
+| ![Q10](assets/test_image_01_q10_420.png) | ![Q50](assets/test_image_01_q50_420.png) | ![Q90](assets/test_image_01_q90_420.png) |
 
 ## Sample Data
 
