@@ -1,89 +1,86 @@
-# JPEG Image Compression Engine From Scratch
+# JPEG Compression Engine (From Scratch)
 
-A decoupled, object-oriented implementation of the standard JPEG compression and decompression pipeline. This project processes raw camera data (.ARW), transforms images into the frequency domain using 2D-DCT, applies custom quantization based on user-defined quality factors, and reconstructs the image through an inverse pipeline.
+A from-scratch implementation of the core JPEG compression pipeline in Python: color transform, chroma subsampling, block-based DCT + quantization, zigzag scanning, and DC/AC symbol encoding.
 
-## Key Features
+**Not a full JPEG codec** — Huffman entropy coding isn't implemented, so this doesn't produce a real `.jpg` bitstream. See [Limitations](#limitations).
 
-- **End-to-End Pipeline:** Implements both the forward encoding (compression) and inverse decoding (reconstruction) processes.
-- **Decoupled Architecture:** Separates configuration matrices, core digital signal processing algorithms, and the CLI execution layer into distinct modules.
-- **Dynamic Quantization:** Generates scaled quantization tables from standard ISO luminance matrices based on a user-defined Quality Factor (1-100).
-- **Matrix Coefficient Pruning:** Analyzes and reports the sparsity (percentage of high-frequency coefficients successfully zeroed out) after the quantization stage.
+## Pipeline
 
-## Project Structure
-
-```text
-├── src/
-│   ├── config.py         # Static configuration and ISO quantization matrices
-│   ├── utils.py          # JpegEncoder class, DCT/IDCT and matrix transformations
-│   └── main.py           # CLI controller, logging configuration, and visualization
-├── data/
-│   └── cat.ARW           # Sample 34.7MB RAW source image
-├── requirements.txt      # Third-party dependencies (rawpy, opencv-python, matplotlib)
-└── README.md             # Documentation
+```
+RAW → RGB → YCbCr → chroma subsample → 8x8 DCT + quantize → zigzag → DC diff / AC RLE
 ```
 
-## Compression & Decompression Pipeline
+| File | Responsibility |
+|---|---|
+| `config.py` | Quantization tables, chroma subsampling constant |
+| `color.py` | RGB ↔ YCbCr, chroma downsample/upsample |
+| `block_codec.py` | 8x8 block DCT + quantization |
+| `scan.py` | Zigzag scan / inverse |
+| `entropy_lite.py` | DC differential + AC run-length coding |
+| `raw_io.py` | RAW file loading |
+| `metrics.py` | PSNR / SSIM |
+| `output_io.py` | Save reconstructed images |
+| `rd_curve.py` | Quality-vs-metric curve plotting |
+| `pipeline.py` | `JpegPipeline` — ties all stages together |
+| `main.py` | CLI entry point |
 
-### Forward Encoder Pipeline
-
-1. **Ingestion:** Load RAW image data (.ARW) and decode to RGB space via `rawpy`.
-2. **Color Transformation:** Convert RGB to YCbCr color space to extract the Luminance (Y) channel.
-3. **Boundary Padding:** Pad the channel dimensions to ensure compatibility with 8x8 block structures.
-4. **Mathematical Transformation:** Apply 2D Discrete Cosine Transform (2D-DCT) to shift spatial pixels into frequency coefficients.
-5. **Quantization:** Divide coefficients by the quality-scaled quantization matrix and round to integers, forcing high-frequency components to zero.
-
-### Inverse Decoder Pipeline
-
-1. **Dequantization:** Rescale quantized matrices back by multiplying with the identical quantization table.
-2. **Inverse Transformation:** Apply 2D Inverse Discrete Cosine Transform (2D-IDCT) to return to the spatial domain.
-3. **Reconstitution:** Clip values to [0, 255], remove boundary padding, merge with chroma channels, and convert back to RGB for rendering.
-
-## Quantitative Metrics
-
-Benchmarks evaluated using a 32.7 MP (7008 x 4672) RAW image input (original size: 34.7 MB).
-
-| Quality Factor (Q) | High-Frequency Coefficients Pruned | Target Compression Ratio | Visual Output Characteristics |
-| --- | --- | --- | --- |
-| Original RAW | 0.00% | 1 : 1 | Uncompressed reference source |
-| Quality = 90 | 70.02% | ~18 : 1 | No perceptible visual degradation |
-| Quality = 50 | 92.83% | ~77 : 1 | Perceptually identical to source; high mathematical sparsity |
-| Quality = 10 | 97.86% | >200 : 1 | Visible block artifacts (8x8 grid patterns appearance) |
-
-## Getting Started
-
-### 1. Environment Setup (Using Anaconda)
+## Install
 
 ```bash
-# Create and activate environment
-conda create -n jpeg_env python=3.11 -y
+conda create -n jpeg_env python=3.11
 conda activate jpeg_env
-
-# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 2. Execution and Configuration
-
-Run the end-to-end pipeline via the command line interface. You can adjust the file source path and target quality factor using parameters:
+## Usage
 
 ```bash
-# Execute with default settings (Quality = 50)
-python src/main.py --input ./data/cat.ARW --quality 50
-
-# Test extreme compression constraints (Quality = 5)
-python src/main.py --input ./data/cat.ARW --quality 5
+python src/main.py --input data/test_image_01.ARW --quality 50
 ```
 
-### 3. Verification & Metrics Output
+| Argument | Default | Description |
+|---|---|---|
+| `--input`, `-i` | required | Path to RAW image |
+| `--quality`, `-q` | `50` | One or more quality factors (0–100) |
+| `--subsampling` | `4:2:0` | `4:2:0` / `4:2:2` / `4:4:4` |
+| `--save` | off | Save reconstructed image(s) + curve plot to `--output-dir` |
+| `--show` | off | Display reconstructed image(s) + curve plot |
+| `--output-dir` | `outputs` | Save location |
+| `--plot-curve` | off | `psnr` / `ssim` / `both` (bare flag = `psnr`) |
 
-Upon a successful run, the pipeline logs each step and renders a Matplotlib visualization comparing the original input side-by-side with the lossy-compressed output:
-
-```text
-2026-07-01 16:00:00,000 - INFO - Initializing JPEG Pipeline (Quality=50)
-2026-07-01 16:00:01,123 - INFO - Step 1: Loading RAW and converting to YCbCr
-2026-07-01 16:00:01,544 - INFO - Step 2: Running forward encoder (DCT + Quantization)
-2026-07-01 16:00:03,110 - INFO - Compression Metric - Pruned Coefficients: 92.83%
-2026-07-01 16:00:03,215 - INFO - Step 3: Running inverse decoder (IDCT + Dequantization)
-2026-07-01 16:00:03,500 - INFO - Step 4: Recombining channels to RGB
-2026-07-01 16:00:03,600 - INFO - Pipeline successful. Rendering visualization...
+Example — sweep qualities and plot both metrics:
+```bash
+python src/main.py --input data/test_image_01.ARW --quality 10 20 30 40 50 60 70 80 90 --plot-curve both --save
 ```
+
+## Benchmark
+
+`data/test_image_01.ARW` (Sony A7 III RAW, 4024x6024), 4:2:0 subsampling:
+
+| Quality | Sparsity (%) | PSNR (dB) | SSIM |
+|---:|---:|---:|---:|
+| 10 | 97.58 | 28.37 | 0.7538 |
+| 20 | 95.93 | 30.14 | 0.8194 |
+| 30 | 94.53 | 31.04 | 0.8476 |
+| 40 | 93.39 | 31.51 | 0.8615 |
+| 50 | 92.31 | 31.86 | 0.8715 |
+| 60 | 91.16 | 32.14 | 0.8796 |
+| 70 | 89.46 | 32.54 | 0.8888 |
+| 80 | 86.82 | 33.04 | 0.8994 |
+| 90 | 80.89 | 34.03 | 0.9154 |
+
+![RD Curve](assets/test_image_01_curve_both.png)
+
+| Quality 10 | Quality 90 |
+|---|---|
+| ![Q10](assets/test_image_01_q10_420.png) | ![Q90](assets/test_image_01_q90_420.png) |
+
+## Sample Data
+
+`data/test_image_01.ARW` (Sony A7 III RAW) is from [Signature Edits](https://www.signatureedits.com/free-raw-photos/), credit Ryan Breitkreutz ([license](https://www.signatureedits.com/free-raw-license-terms/): free for commercial/non-commercial use, no attribution required). Not committed to this repo (47MB RAW file, unsuited to Git regardless of license) — download your own from the link above and place it under `data/`.
+
+## Limitations
+
+- No Huffman coding — no real compressed bitstream or valid `.jpg` output
+- `--save` writes reconstructed pixels (e.g. PNG); file size ≠ true JPEG size
+- RD curve x-axis is quality factor, not measured bpp (no entropy stage to measure)
