@@ -45,9 +45,9 @@ Benchmarks evaluated using a 32.7 MP (7008 x 4672) RAW image input (original siz
 | Quality Factor (Q) | High-Frequency Coefficients Pruned | Target Compression Ratio | Visual Output Characteristics |
 | --- | --- | --- | --- |
 | Original RAW | 0.00% | 1 : 1 | Uncompressed reference source |
-| Quality = 90 | ~65.40% | ~18 : 1 | No perceptible visual degradation |
+| Quality = 90 | 70.02% | ~18 : 1 | No perceptible visual degradation |
 | Quality = 50 | 92.83% | ~77 : 1 | Perceptually identical to source; high mathematical sparsity |
-| Quality = 5 | >98.50% | >200 : 1 | Visible block artifacts (8x8 grid patterns appearance) |
+| Quality = 10 | 97.86% | >200 : 1 | Visible block artifacts (8x8 grid patterns appearance) |
 
 ## Getting Started
 
